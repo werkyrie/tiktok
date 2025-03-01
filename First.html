@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel Client Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="light">
+    <script>
+        // Authentication check
+        (function checkAuth() {
+            const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+            const loginTime = new Date(localStorage.getItem('loginTime'));
+            const currentTime = new Date();
+            const hoursSinceLogin = (currentTime - loginTime) / (1000 * 60 * 60);
+
+            // Redirect if not logged in or session expired (24 hours)
+            if (!isLoggedIn || hoursSinceLogin > 24) {
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('loginTime');
+                window.location.replace('./index.html');
+            }
+        })();
+    </script>
+    <div class="flex flex-col md:flex-row min-h-screen">
+        <!-- Sidebar -->
+        <div id="sidebar" class="w-full md:w-64">
+            <div class="p-4 flex justify-between items-center">
+                <h1 class="text-xl font-bold site-title">Hotel Management</h1>
+                <button id="toggle-sidebar" class="text-white md:hidden">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            <nav class="mt-6">
+                <ul>
+                    <li class="nav-item mb-1">
+                        <a href="#" data-page="dashboard" class="px-4 py-3 flex items-center hover:bg-primary-dark text-white">
+                            <i class="fas fa-tachometer-alt mr-3"></i>
+                            <span class="sidebar-title">Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-1">
+                        <a href="#" data-page="accounts" class="px-4 py-3 flex items-center hover:bg-primary-dark text-white">
+                            <i class="fas fa-users mr-3"></i>
+                            <span class="sidebar-title">Accounts</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-1">
+                        <a href="#" data-page="agents" class="px-4 py-3 flex items-center hover:bg-primary-dark text-white">
+                            <i class="fas fa-user-tie mr-3"></i>
+                            <span class="sidebar-title">Agents</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-1">
+                        <a href="#" data-page="reports" class="px-4 py-3 flex items-center hover:bg-primary-dark text-white">
+                            <i class="fas fa-chart-bar mr-3"></i>
+                            <span class="sidebar-title">Reports</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-1">
+                        <a href="#" data-page="settings" class="px-4 py-3 flex items-center hover:bg-primary-dark text-white">
+                            <i class="fas fa-cog mr-3"></i>
+                            <span class="sidebar-title">Settings</span>
+                        </a>
+                    </li>
+
+                    <li class="nav-item mb-1">
+                        <a href="#" data-page="performance" class="px-4 py-3 flex items-center hover:bg-primary-dark text-white">
+                            <i class="fa-chart-line mr-3"></i>
+                            <span class="sidebar-title">Performance</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mt-auto mb-4">
+                        <a href="#" onclick="logout()" class="px-4 py-3 flex items-center hover:bg-primary-dark text-white">
+                            <i class="fas fa-sign-out-alt mr-3"></i>
+                            <span class="sidebar-title">Logout</span>
+                        </a>
+                    </li>
+
+                </ul>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div id="main-content" class="flex-1 p-4 md:p-6 bg-gray-50 dark:bg-gray-900 transition-all duration-300 ease-in-out">
+            <!-- Mobile Header -->
+            <div class="mb-6 flex justify-between items-center md:hidden">
+                <button id="mobile-menu-btn" class="text-gray-600 dark:text-gray-300">
+                    <i class="fas fa-bars text-2xl"></i>
+                </button>
+                <h1 class="text-xl font-bold">Hotel Management</h1>
+                <button id="mobile-theme-toggle" class="text-gray-600 dark:text-gray-300">
+                    <i class="fas fa-moon dark:hidden"></i>
+                    <i class="fas fa-sun hidden dark:block"></i>
+                </button>
+            </div>
+
+            <!-- Desktop Header -->
+            <div class="hidden md:flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-bold" id="page-title">Dashboard</h1>
+                <div class="flex items-center space-x-4">
+                    <a id="export-btn" href="#" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-all" download="hotel-management-data.json">
+                        <i class="fas fa-download mr-2"></i>Export Data
+                    </a>
+                    <label for="import-file" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-all cursor-pointer">
+                        <i class="fas fa-upload mr-2"></i>Import Data
+                    </label>
+                    <input type="file" id="import-file" accept=".json" class="hidden" onchange="importDirectly(this.files[0])">
+                    <button id="theme-toggle" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-all">
+                        <i class="fas fa-moon dark:hidden"></i>
+                        <i class="fas fa-sun hidden dark:block"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Page Content -->
+            <div id="page-content">
+                <!-- Dashboard Page -->
+                <div id="dashboard-page" class="page active">
+                    <!-- Date Filter -->
+                    <div class="card mb-6 p-4">
+                        <div class="flex flex-col md:flex-row gap-4 items-center">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium mb-1">Filter by Date Range</label>
+                                <div class="flex gap-2">
+                                    <input type="date" id="date-from" class="w-full rounded-md px-3 py-2 text-base">
+                                    <input type="date" id="date-to" class="w-full rounded-md px-3 py-2 text-base">
+                                </div>
+                            </div>
+                            <div class="w-full md:w-auto">
+                                <button id="apply-filter" class="btn-primary w-full md:w-auto rounded-md px-6 py-2">
+                                    Apply Filter
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stats Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                        <div class="card p-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm font-medium">Total Clients</p>
+                                    <h3 class="text-2xl font-bold mt-1" id="total-clients">0</h3>
+                                </div>
+                                <div class="bg-blue-100 dark:bg-blue-900 p-3 rounded-full">
+                                    <i class="fas fa-users text-blue-500 dark:text-blue-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card p-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm font-medium">Total Orders</p>
+                                    <h3 class="text-2xl font-bold mt-1" id="total-orders">0</h3>
+                                </div>
+                                <div class="bg-green-100 dark:bg-green-900 p-3 rounded-full">
+                                    <i class="fas fa-shopping-bag text-green-500 dark:text-green-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card p-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm font-medium">Total Deposits</p>
+                                    <h3 class="text-2xl font-bold mt-1" id="total-deposits">$0</h3>
+                                </div>
+                                <div class="bg-purple-100 dark:bg-purple-900 p-3 rounded-full">
+                                    <i class="fas fa-money-bill-wave text-purple-500 dark:text-purple-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card p-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm font-medium">Total Withdrawals</p>
+                                    <h3 class="text-2xl font-bold mt-1" id="total-withdrawals">$0</h3>
+                                </div>
+                                <div class="bg-red-100 dark:bg-red-900 p-3 rounded-full">
+                                    <i class="fas fa-hand-holding-usd text-red-500 dark:text-red-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                        <div class="card p-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm font-medium">Active Clients</p>
+                                    <h3 class="text-2xl font-bold mt-1" id="active-clients">0</h3>
+                                </div>
+                                <div class="bg-green-100 dark:bg-green-900 p-3 rounded-full">
+                                    <i class="fas fa-user-check text-green-500 dark:text-green-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card p-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm font-medium">In Process</p>
+                                    <h3 class="text-2xl font-bold mt-1" id="in-process">0</h3>
+                                </div>
+                                <div class="bg-yellow-100 dark:bg-yellow-900 p-3 rounded-full">
+                                    <i class="fas fa-spinner text-yellow-500 dark:text-yellow-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card p-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm font-medium">Eliminated</p>
+                                    <h3 class="text-2xl font-bold mt-1" id="eliminated">0</h3>
+                                </div>
+                                <div class="bg-red-100 dark:bg-red-900 p-3 rounded-full">
+                                    <i class="fas fa-user-slash text-red-500 dark:text-red-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card p-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm font-medium">Shops Open</p>
+                                    <h3 class="text-2xl font-bold mt-1" id="shops-open">0</h3>
+                                </div>
+                                <div class="bg-blue-100 dark:bg-blue-900 p-3 rounded-full">
+                                    <i class="fas fa-store text-blue-500 dark:text-blue-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div class="card p-4">
+                            <h3 class="text-lg font-semibold mb-4">Orders History</h3>
+                            <div style="height: 300px;">
+                                <canvas id="orders-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="card p-4">
+                            <h3 class="text-lg font-semibold mb-4">Financial Activity</h3>
+                            <div style="height: 300px;">
+                                <canvas id="financial-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="card p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold">Recent Client Activity</h3>
+                            <a href="#" data-page="accounts" class="text-primary hover:underline">View All</a>
+                        </div>
+                        <div class="table-container">
+                            <table id="recent-activity-table">
+                                <thead>
+                                    <tr>
+                                        <th>Client Name</th>
+                                        <th>Shop ID</th>
+                                        <th>Agent</th>
+                                        <th>Last Activity</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-activity-body">
+                                    <tr>
+                                        <td colspan="6" class="text-center py-4">No recent activity</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accounts Page -->
+                <div id="accounts-page" class="page hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold">Client Accounts</h2>
+                        <div class="flex space-x-2">
+                            <button id="delete-selected-btn" class="bg-red-600 text-white rounded-md px-4 py-2 hidden">
+                                <i class="fas fa-trash-alt mr-2"></i>Delete Selected
+                            </button>
+                            <button id="add-client-btn" class="btn-primary rounded-md px-4 py-2">
+                                <i class="fas fa-plus mr-2"></i>Add New Client
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Search and Filter -->
+                    <div class="card mb-6 p-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Search</label>
+                                <input type="text" id="client-search" placeholder="Search by name or ID..." class="w-full rounded-md px-3 py-2 text-base">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Agent</label>
+                                <select id="agent-filter" class="w-full rounded-md px-3 py-2 text-base">
+                                    <option value="">All Agents</option>
+                                    <option value="KY">KY</option>
+                                    <option value="LOVELY">LOVELY</option>
+                                    <option value="JHE">JHE</option>
+                                    <option value="VIVIAN">VIVIAN</option>
+                                    <option value="UNO">UNO</option>
+                                    <option value="ANA">ANA</option>
+                                    <option value="AVIANA">AVIANA</option>
+                                    <option value="KEL">KEL</option>
+                                    <option value="CU">CU</option>
+                                    <option value="ANNIE">ANNIE</option>
+                                    <option value="YNA">YNA</option>
+                                    <option value="KEN">KEN</option>
+                                    <option value="CINDY">CINDY</option>
+                                    <option value="MAR">MAR</option>
+                                    <option value="PRIMO">PRIMO</option>
+                                    <option value="THAC">THAC</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Status</label>
+                                <select id="status-filter" class="w-full rounded-md px-3 py-2 text-base">
+                                    <option value="">All Status</option>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                    <option value="in-process">In Process</option>
+                                    <option value="eliminated">Eliminated</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Sort By</label>
+                                <select id="sort-option" class="w-full rounded-md px-3 py-2 text-base">
+                                    <option value="name-asc">Name (A-Z)</option>
+                                    <option value="name-desc">Name (Z-A)</option>
+                                    <option value="date-asc">Date (Oldest First)</option>
+                                    <option value="date-desc">Date (Newest First)</option>
+                                    <option value="amount-asc">Amount (Low to High)</option>
+                                    <option value="amount-desc">Amount (High to Low)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Clients Table -->
+                    <div class="card p-4">
+                        <div class="table-container">
+                            <table id="clients-table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-10">
+                                            <input type="checkbox" id="select-all-clients" class="rounded">
+                                        </th>
+                                        <th>Shop ID</th>
+                                        <th>Client Name</th>
+                                        <th>Agent</th>
+                                        <th>KYC Date</th>
+                                        <th>Total Orders</th>
+                                        <th>Total Amount</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clients-body">
+                                    <tr>
+                                        <td colspan="9" class="text-center py-4">No clients found</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-4 flex justify-between items-center">
+                            <div class="text-sm">
+                                Showing <span id="clients-showing">0</span> of <span id="clients-total">0</span> clients
+                            </div>
+                            <div class="flex space-x-2">
+                                <button id="prev-page" class="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 disabled:opacity-50">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <span id="current-page" class="px-3 py-1">1</span>
+                                <button id="next-page" class="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 disabled:opacity-50">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agents Page -->
+                <div id="agents-page" class="page hidden">
+                    <!-- Date Filter for Agents -->
+                    <div class="card mb-6 p-4">
+                        <div class="flex flex-col md:flex-row gap-4 items-center">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium mb-1">Filter by Date Range</label>
+                                <div class="flex gap-2">
+                                    <input type="date" id="agent-date-from" class="w-full rounded-md px-3 py-2 text-base">
+                                    <input type="date" id="agent-date-to" class="w-full rounded-md px-3 py-2 text-base">
+                                </div>
+                            </div>
+                            <div class="w-full md:w-auto">
+                                <button id="apply-agent-filter" class="btn-primary w-full md:w-auto rounded-md px-6 py-2">
+                                    Apply Filter
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card p-4 mb-6">
+                        <h2 class="text-xl font-bold mb-4">Agents Performance</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div class="card p-4">
+                                <h3 class="text-lg font-semibold mb-2">Top Performing Agents</h3>
+                                <div style="height: 250px;">
+                                    <canvas id="top-agents-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="card p-4">
+                                <h3 class="text-lg font-semibold mb-2">Client Acquisition</h3>
+                                <div style="height: 250px;">
+                                    <canvas id="client-acquisition-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="card p-4">
+                                <h3 class="text-lg font-semibold mb-2">Revenue Generation</h3>
+                                <div style="height: 250px;">
+                                    <canvas id="revenue-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card p-4">
+                        <h3 class="text-lg font-semibold mb-4">Agent Directory</h3>
+                        <div class="table-container">
+                            <table id="agents-table">
+                                <thead>
+                                    <tr>
+                                        <th>Agent Name</th>
+                                        <th>Total Clients</th>
+                                        <th>Active Clients</th>
+                                        <th>Total Orders</th>
+                                        <th>Total Deposits</th>
+                                        <th>Commission</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="agents-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reports Page -->
+                <div id="reports-page" class="page hidden">
+                    <div class="card p-4 mb-6">
+                        <h2 class="text-xl font-bold mb-4">Generate Reports</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Report Type</label>
+                                <select id="report-type" class="w-full rounded-md px-3 py-2 text-base">
+                                    <option value="client-summary">Client Summary</option>
+                                    <option value="financial">Financial Report</option>
+                                    <option value="agent-performance">Agent Performance</option>
+                                    <option value="order-analysis">Order Analysis</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Date Range</label>
+                                <div class="flex gap-2">
+                                    <input type="date" id="report-date-from" class="w-full rounded-md px-3 py-2 text-base">
+                                    <input type="date" id="report-date-to" class="w-full rounded-md px-3 py-2 text-base">
+                                </div>
+                            </div>
+                            <div class="flex items-end">
+                                <button id="generate-report" class="btn-primary w-full rounded-md px-4 py-2">
+                                    Generate Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="report-output" class="card p-4 hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold" id="report-title">Report</h3>
+                            <button id="export-report" class="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-all">
+                                <i class="fas fa-download mr-2"></i>Export
+                            </button>
+                        </div>
+                        <div id="report-content">
+                            <!-- Report content will be dynamically inserted here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Page -->
+                <div id="settings-page" class="page hidden">
+                    <div class="card p-4 mb-6">
+                        <h2 class="text-xl font-bold mb-4">Application Settings</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <h3 class="text-lg font-semibold mb-3">Theme Settings</h3>
+                                <div class="flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-800 rounded-md">
+                                    <span>Dark Mode</span>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="dark-mode-toggle" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-500 peer-checked:bg-primary"></div>
+                                    </label>
+                                </div>
+                            </div>
+                           
+                        </div>
+                        <div class="mt-4">
+                            <h3 class="text-lg font-semibold mb-3">Data Management</h3>
+                            <div class="space-y-3">
+                                <button id="clear-data" class="w-full px-4 py-2 rounded-md bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 transition-all text-left">
+                                    <i class="fas fa-trash-alt mr-2"></i>Clear All Data
+                                </button>
+                                <button id="backup-data" class="w-full px-4 py-2 rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 transition-all text-left">
+                                    <i class="fas fa-cloud-download-alt mr-2"></i>Backup Data
+                                </button>
+                                <button id="restore-data" class="w-full px-4 py-2 rounded-md bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800 transition-all text-left">
+                                    <i class="fas fa-cloud-upload-alt mr-2"></i>Restore Data
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Add/Edit Client Modal -->
+    <div id="client-modal" class="modal">
+        <div class="modal-content max-w-2xl w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold" id="client-modal-title">Add New Client</h2>
+                <button class="modal-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="client-form">
+                <input type="hidden" id="client-id">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Shop ID</label>
+                        <input type="text" id="shop-id" class="w-full rounded-md px-3 py-2 text-base" required>
+                        <p id="shopid-error" class="text-red-500 text-sm hidden">This Shop ID already exists</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Client Name</label>
+                        <input type="text" id="client-name" class="w-full rounded-md px-3 py-2 text-base" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Agent</label>
+                        <select id="client-agent" class="w-full rounded-md px-3 py-2 text-base" required>
+                            <option value="">Select Agent</option>
+                            <option value="KY">KY</option>
+                            <option value="LOVELY">LOVELY</option>
+                            <option value="JHE">JHE</option>
+                            <option value="VIVIAN">VIVIAN</option>
+                            <option value="UNO">UNO</option>
+                            <option value="ANA">ANA</option>
+                            <option value="AVIANA">AVIANA</option>
+                            <option value="KEL">KEL</option>
+                            <option value="CU">CU</option>
+                            <option value="ANNIE">ANNIE</option>
+                            <option value="YNA">YNA</option>
+                            <option value="KEN">KEN</option>
+                            <option value="CINDY">CINDY</option>
+                            <option value="MAR">MAR</option>
+                            <option value="PRIMO">PRIMO</option>
+                            <option value="THAC">THAC</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">KYC Completed Date</label>
+                        <input type="date" id="kyc-date" class="w-full rounded-md px-3 py-2 text-base">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Added Product Date</label>
+                        <input type="date" id="product-date" class="w-full rounded-md px-3 py-2 text-base">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Status</label>
+                        <select id="client-status" class="w-full rounded-md px-3 py-2 text-base" required>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="in-process">In Process</option>
+                            <option value="eliminated">Eliminated</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-1">Customer Details/Asset/Work</label>
+                    <textarea id="customer-details" rows="3" class="w-full rounded-md px-3 py-2 text-base"></textarea>
+                </div>
+
+                <!-- Orders Section -->
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-medium">Orders</h3>
+                        <button type="button" id="add-order-btn" >
+                            <i class="fas fa-plus mr-1"></i>Add Order
+                        </button>
+                    </div>
+                    <div id="orders-container" class="space-y-4">
+                        <!-- Orders will be added dynamically -->
+                    </div>
+                </div>
+
+                <!-- Deposits Section -->
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-medium">Deposits</h3>
+                        <button type="button" id="add-deposit-btn">
+                            <i class="fas fa-plus mr-1"></i>Add Deposit
+                        </button>
+                    </div>
+                    <div id="deposits-container" class="space-y-4">
+                        <!-- Deposits will be added dynamically -->
+                    </div>
+                </div>
+
+                <!-- Withdrawals Section -->
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-medium">Withdrawals</h3>
+                        <button type="button" id="add-withdrawal-btn" >
+                            <i class="fas fa-plus mr-1"></i>Add Withdrawal
+                        </button>
+                    </div>
+                    <div id="withdrawals-container" class="space-y-4">
+                        <!-- Withdrawals will be added dynamically -->
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-2 mt-6">
+                    <button type="button" class="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 modal-close">Cancel</button>
+                    <button type="submit" id="save-client" class="btn-primary px-4 py-2 rounded-md">Save Client</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Client View Modal -->
+    <div id="view-client-modal" class="modal">
+        <div class="modal-content max-w-4xl w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold" id="view-client-name">Client Details</h2>
+                <button class="modal-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="mb-6">
+                <div class="flex flex-wrap gap-y-2">
+                    <div class="w-full md:w-1/3 pr-2">
+                        <span class="text-gray-500 dark:text-gray-400 text-sm">Shop ID:</span>
+                        <p id="view-shop-id" class="font-medium"></p>
+                    </div>
+                    <div class="w-full md:w-1/3 pr-2">
+                        <span class="text-gray-500 dark:text-gray-400 text-sm">Agent:</span>
+                        <p id="view-agent" class="font-medium"></p>
+                    </div>
+                    <div class="w-full md:w-1/3">
+                        <span class="text-gray-500 dark:text-gray-400 text-sm">Status:</span>
+                        <p id="view-status" class="font-medium"></p>
+                    </div>
+                    <div class="w-full md:w-1/3 pr-2">
+                        <span class="text-gray-500 dark:text-gray-400 text-sm">KYC Date:</span>
+                        <p id="view-kyc-date" class="font-medium"></p>
+                    </div>
+                    <div class="w-full md:w-1/3 pr-2">
+                        <span class="text-gray-500 dark:text-gray-400 text-sm">Product Date:</span>
+                        <p id="view-product-date" class="font-medium"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-6">
+                <span class="text-gray-500 dark:text-gray-400 text-sm">Customer Details:</span>
+                <p id="view-customer-details" class="mt-1 p-2 bg-gray-100 dark:bg-gray-800 rounded"></p>
+            </div>
+            
+            <!-- Tab Navigation -->
+            <div class="border-b border-gray-200 dark:border-gray-700 mb-4">
+                <ul class="flex flex-wrap -mb-px">
+                    <li class="mr-2">
+                        <a href="#" class="tab-button active" data-tab="orders">Orders</a>
+                    </li>
+                    <li class="mr-2">
+                        <a href="#" class="tab-button" data-tab="financial">Financial</a>
+                    </li>
+                    <li class="mr-2">
+                        <a href="#" class="tab-button" data-tab="summary">Summary</a>
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- Tab Content -->
+            <div class="tab-content active" id="orders-tab">
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Order #</th>
+                                <th>Date</th>
+                                <th>Location</th>
+                                <th>Price</th>
+                            </tr>
+                        </thead>
+                        <tbody id="view-orders-body">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="financial-tab">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                    <div>
+                        <h3 class="text-lg font-semibold mb-3">Deposits</h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Amount</th>
+                                        <th>Payment Mode</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="view-deposits-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold mb-3">Withdrawals</h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="view-withdrawals-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="card p-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                        <div>
+                            <p class="text-gray-500 dark:text-gray-400 text-sm">Total Deposits</p>
+                            <p id="view-total-deposits" class="text-xl font-bold text-green-600 dark:text-green-400"></p>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 dark:text-gray-400 text-sm">Total Withdrawals</p>
+                            <p id="view-total-withdrawals" class="text-xl font-bold text-red-600 dark:text-red-400"></p>
+                        </div>
+                        <div>
+                            <p class="text-gray-500 dark:text-gray-400 text-sm">Balance</p>
+                            <p id="view-balance" class="text-xl font-bold"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="summary-tab">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="card p-4">
+                        <h3 class="text-lg font-semibold mb-3">Orders Summary</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-gray-500 dark:text-gray-400 text-sm">Total Orders</p>
+                                <p id="view-total-orders" class="text-xl font-bold"></p>
+                            </div>
+                            <div>
+                                <p class="text-gray-500 dark:text-gray-400 text-sm">Total Order Value</p>
+                                <p id="view-total-order-value" class="text-xl font-bold"></p>
+                            </div>
+                            <div>
+                                <p class="text-gray-500 dark:text-gray-400 text-sm">Average Order Value</p>
+                                <p id="view-avg-order-value" class="text-xl font-bold"></p>
+                            </div>
+                            <div>
+                                <p class="text-gray-500 dark:text-gray-400 text-sm">First Order Date</p>
+                                <p id="view-first-order-date" class="text-xl font-bold"></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card p-4">
+                        <h3 class="text-lg font-semibold mb-3">Financial Summary</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-gray-500 dark:text-gray-400 text-sm">Total Deposits Count</p>
+                                <p id="view-deposits-count" class="text-xl font-bold"></p>
+                            </div>
+                            <div>
+                                <p class="text-gray-500 dark:text-gray-400 text-sm">Total Withdrawals Count</p>
+                                <p id="view-withdrawals-count" class="text-xl font-bold"></p>
+                            </div>
+                            <div>
+                                <p class="text-gray-500 dark:text-gray-400 text-sm">Last Transaction Date</p>
+                                <p id="view-last-transaction" class="text-xl font-bold"></p>
+                            </div>
+                            <div>
+                                <p class="text-gray-500 dark:text-gray-400 text-sm">Current Balance</p>
+                                <p id="view-current-balance" class="text-xl font-bold"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card p-4 mt-6">
+                    <h3 class="text-lg font-semibold mb-3">Activity Timeline</h3>
+                    <div id="timeline" class="space-y-4 pl-4 border-l-2 border-primary">
+                        <!-- Timeline items will be added dynamically -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-2 mt-6">
+                <button type="button" class="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 modal-close">Close</button>
+                <button type="button" id="edit-client-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md">Edit Client</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts.js"></script>
+        
+    
+</body>
+</html>
