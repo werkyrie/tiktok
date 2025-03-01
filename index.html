@@ -6,6 +6,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Hotel Client Management</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script type="module">
+        import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js";
+        
+        const auth = getAuth();
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                window.location.href = 'First.html';
+            } catch (error) {
+                alert('Login failed: ' + error.message);
+            }
+        });
+    </script>
 </head>
 <body class="bg-gray-100">
     <div class="min-h-screen flex items-center justify-center">
@@ -26,51 +44,5 @@
             </form>
         </div>
     </div>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDJ0fAeEp3sGK_ruYWg3cbt6GlpoUfLdRk",
-            authDomain: "tiktokhotel-5dd80.firebaseapp.com",
-            projectId: "tiktokhotel-5dd80",
-            storageBucket: "tiktokhotel-5dd80.appspot.com",
-            messagingSenderId: "506654284082",
-            appId: "1:506654284082:web:70030a4abb37167167df2b",
-            measurementId: "G-GS0J3X8EBP"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-
-        // Add loading state
-        const loginForm = document.getElementById('login-form');
-        const submitButton = loginForm.querySelector('button[type="submit"]');
-
-        loginForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            // Disable button and show loading state
-            submitButton.disabled = true;
-            submitButton.innerHTML = 'Logging in...';
-            
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-
-            try {
-                const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                console.log('Login successful:', userCredential.user);
-                window.location.href = 'First.html';
-            } catch (error) {
-                console.error('Login error:', error);
-                alert('Login failed: ' + error.message);
-                // Reset button state
-                submitButton.disabled = false;
-                submitButton.innerHTML = 'Login';
-            }
-        });
-    </script>
 </body>
 </html>
