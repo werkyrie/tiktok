@@ -1,6 +1,6 @@
 /* Base Styles */
 :root {
-  --primary: #2563eb;
+  --primary: #0c0c0c;
   --primary-dark: #1d4ed8;
   --success: #16a34a;
   --danger: #dc2626;
@@ -17,6 +17,8 @@
   --gray-800: #1f2937;
   --gray-900: #111827;
 }
+
+
 
 /* Theme Colors */
 body.light {
@@ -179,6 +181,16 @@ textarea:focus {
   overflow-y: auto;
 }
 
+.modal.show {
+  display: flex;
+  opacity: 1;
+}
+
+
+.modal.show .modal-content {
+  transform: translateY(0);
+}
+
 /* Status Badges */
 .status-badge {
   padding: 0.25rem 0.75rem;
@@ -281,3 +293,38 @@ textarea:focus {
   }
 }
 
+@media (max-width: 640px) {
+  .responsive-table td:before {
+      content: attr(data-label);
+      float: left;
+      font-weight: bold;
+      text-transform: uppercase;
+  }
+  .responsive-table thead {
+      display: none;
+  }
+  .responsive-table tbody tr {
+      display: block;
+      margin-bottom: 1rem;
+      border-bottom: 2px solid rgba(93, 92, 222, 0.2);
+  }
+  .responsive-table tbody td {
+      display: block;
+      text-align: right;
+      padding-left: 50%;
+      position: relative;
+      border-bottom: 1px solid rgba(93, 92, 222, 0.1);
+  }
+}
+.editable-cell:focus {
+  outline: 2px solid #5D5CDE;
+  background-color: rgba(93, 92, 222, 0.1);
+}
+/* Add these styles to your existing style section */
+.bg-primary {
+  background-color: #000000;
+}
+
+.hover\:bg-opacity-90:hover {
+  opacity: 0.9;
+}
