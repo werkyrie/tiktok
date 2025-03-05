@@ -1,7 +1,3 @@
-
-    
-
-
         // Initialize app state
         const appState = {
             clients: [],
@@ -9,7 +5,7 @@
             currentPage: 'dashboard',
             darkMode: window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches,
             clientsPage: 1,
-            clientsPerPage: 10,
+            clientsPerPage: 50,
             filters: {
                 search: '',
                 agent: '',
@@ -161,10 +157,16 @@
                 // Hide error message
                 document.getElementById('shopid-error').classList.add('hidden');
                 
+                // Set creation date to today for new clients only
+                const today = new Date();
+                const formattedDate = today.toISOString().split('T')[0];
+                document.getElementById('creation-date').value = formattedDate;
+                
                 // Show modal
                 clientModal.style.display = 'flex';
             });
-            
+
+
             // Add order, deposit, withdrawal buttons
             addOrderBtn.addEventListener('click', addOrderField);
             addDepositBtn.addEventListener('click', addDepositField);
@@ -189,6 +191,9 @@
                     return;
                 }
                 
+                if (!validateDates()) {
+                    return;
+                }
                 saveClient();
             });
             
@@ -343,61 +348,114 @@ exportBtn.addEventListener('click', function(e) {
         
         // Function for direct import without modal
         function importDirectly(file) {
-    if (!file) return;
-    
-    if (file.type !== 'application/json') {
-        alert('Please select a JSON file.');
-        return;
-    }
-    
-    const reader = new FileReader();
-    reader.onload = function(event) {
-        try {
-            const data = JSON.parse(event.target.result);
+            if (!file) return;
             
-            if (!data.clients || !Array.isArray(data.clients)) {
-                alert('Invalid data format. Missing clients array.');
+            if (file.type !== 'application/json') {
+                alert('Please select a JSON file.');
                 return;
             }
             
-            // Check for duplicate Shop IDs
-            const duplicates = findDuplicateShopIds(data.clients);
-            if (duplicates.length > 0) {
-                alert(`The import contains duplicate Shop IDs: ${duplicates.join(', ')}. Please fix the duplicates and try again.`);
-                return;
-            }
-            
-            // Confirm before overwriting
-            if (confirm(`Are you sure you want to import ${data.clients.length} clients? This will replace all existing data.`)) {
-                appState.clients = data.clients;
-                
-                // Import settings if available
-                if (data.settings) {
-                    if (data.settings.darkMode !== undefined) {
-                        appState.darkMode = data.settings.darkMode;
-                        setTheme(appState.darkMode);
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const importedData = JSON.parse(event.target.result);
+                    
+                    if (!importedData.clients || !Array.isArray(importedData.clients)) {
+                        alert('Invalid data format. Missing clients array.');
+                        return;
                     }
+                    
+                    // Check for duplicate Shop IDs between imported and existing data
+                    const existingShopIds = new Set(appState.clients.map(client => client.shopId));
+                    const duplicates = [];
+                    
+                    importedData.clients.forEach(importedClient => {
+                        if (importedClient.shopId && existingShopIds.has(importedClient.shopId)) {
+                            duplicates.push(importedClient.shopId);
+                        }
+                    });
+                    
+                    if (duplicates.length > 0) {
+                        const updateConfirm = confirm(
+                            `Found ${duplicates.length} clients with existing Shop IDs. Would you like to:\n` +
+                            '- Click OK to update existing records\n' +
+                            '- Click Cancel to skip these records'
+                        );
+                        
+                        if (updateConfirm) {
+                            // Update existing records
+                            importedData.clients.forEach(importedClient => {
+                                const existingIndex = appState.clients.findIndex(
+                                    c => c.shopId === importedClient.shopId
+                                );
+                                
+                                if (existingIndex !== -1) {
+                                    // Merge existing and imported data
+                                    const existingClient = appState.clients[existingIndex];
+                                    appState.clients[existingIndex] = {
+                                        ...existingClient,
+                                        ...importedClient,
+                                        updatedAt: new Date().toISOString(),
+                                        // Merge arrays if they exist
+                                        orders: [...(existingClient.orders || []), ...(importedClient.orders || [])],
+                                        deposits: [...(existingClient.deposits || []), ...(importedClient.deposits || [])],
+                                        withdrawals: [...(existingClient.withdrawals || []), ...(importedClient.withdrawals || [])]
+                                    };
+                                } else {
+                                    // Add new client
+                                    appState.clients.push({
+                                        ...importedClient,
+                                        createdAt: new Date().toISOString(),
+                                        updatedAt: new Date().toISOString()
+                                    });
+                                }
+                            });
+                        } else {
+                            // Only add new records
+                            const newClients = importedData.clients.filter(
+                                importedClient => !existingShopIds.has(importedClient.shopId)
+                            );
+                            appState.clients.push(...newClients.map(client => ({
+                                ...client,
+                                createdAt: new Date().toISOString(),
+                                updatedAt: new Date().toISOString()
+                            })));
+                        }
+                    } else {
+                        // No duplicates, just add all new records
+                        appState.clients.push(...importedData.clients.map(client => ({
+                            ...client,
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString()
+                        })));
+                    }
+                    
+                    // Import settings if available
+                    if (importedData.settings) {
+                        if (importedData.settings.darkMode !== undefined) {
+                            appState.darkMode = importedData.settings.darkMode;
+                            setTheme(appState.darkMode);
+                        }
+                    }
+                    
+                    // Save and update UI
+                    saveData();
+                    updateDashboard();
+                    updateClientsTable();
+                    updateAgentsTable();
+                    updateAgentsCharts();
+                    updateAgentFilter();
+                    
+                    alert('Data imported successfully!');
+                } catch (err) {
+                    alert('Error parsing JSON data: ' + err.message);
                 }
-                
-                saveData();
-                updateDashboard();
-                updateClientsTable();
-                updateAgentsTable();
-                updateAgentsCharts();
-                updateAgentFilter();
-                
-                alert('Data imported successfully!');
-            }
-        } catch (err) {
-            alert('Error parsing JSON data: ' + err.message);
-        }
-    };
-    reader.onerror = function() {
-        alert('Error reading file.');
-    };
-    reader.readAsText(file);
-}
-        
+            };
+            reader.onerror = function() {
+                alert('Error reading file.');
+            };
+            reader.readAsText(file);
+        }      
         // Initialize UI components
         function initUI() {
             // Initialize charts
@@ -760,6 +818,9 @@ function toggleSidebar() {
             const productDate = document.getElementById('product-date').value;
             const status = document.getElementById('client-status').value;
             const customerDetails = document.getElementById('customer-details').value;
+            const creationDate = document.getElementById('creation-date').value;
+            const formattedCreationDate = new Date(creationDate);
+            formattedCreationDate.setHours(12, 0, 0, 0); // Set to noon to avoid timezone issues
             
             // Get orders
             const orders = [];
@@ -795,7 +856,7 @@ function toggleSidebar() {
                     amount: parseFloat(inputs[1].value) || 0
                 });
             }
-            
+        
             // Create client object
             const client = {
                 id: clientId || generateId(),
@@ -809,41 +870,40 @@ function toggleSidebar() {
                 orders,
                 deposits,
                 withdrawals,
-                createdAt: new Date().toISOString(),
+                createdAt: formattedCreationDate.toISOString(),
                 updatedAt: new Date().toISOString()
             };
-            
-            // Add or update client
+        
+            // Add or update client in appState
             if (clientId) {
-                // Update existing client
                 const index = appState.clients.findIndex(c => c.id === clientId);
                 if (index !== -1) {
-                    client.createdAt = appState.clients[index].createdAt;
-                    appState.clients[index] = client;
+                    // Preserve the original creation date when editing
+                    appState.clients[index] = {
+                        ...client,
+                        createdAt: appState.clients[index].createdAt // Keep original creation date
+                    };
                 }
             } else {
-                // Add new client
                 appState.clients.push(client);
             }
-            
-            // Save data
+        
+            // Save data to Firebase
             saveData();
-            
+        
             // Update UI
             updateDashboard();
             updateClientsTable();
             updateAgentsTable();
             updateAgentsCharts();
-            
-            // Update agent filter
             updateAgentFilter();
-            
-            // Close modal
+        
+            // Close modal and show confirmation
             closeAllModals();
-            
-            // Show confirmation
             alert(`Client ${clientId ? 'updated' : 'added'} successfully!`);
-        }
+        } // End of saveClient function
+
+
         
         // Generate unique ID
         function generateId() {
@@ -1026,7 +1086,7 @@ function toggleSidebar() {
             // Setup edit button
             document.getElementById('edit-client-btn').onclick = () => {
                 editClient(clientId);
-                closeAllModals();
+                
             };
             
             // Activate first tab
@@ -1096,7 +1156,11 @@ function toggleSidebar() {
                     });
                 });
             }
-            
+             // Set creation date if it exists
+    if (client.createdAt) {
+        document.getElementById('creation-date').value = 
+            client.createdAt.split('T')[0]; // Convert ISO date to YYYY-MM-DD
+    }
             // Populate deposits
             if (client.deposits && client.deposits.length > 0) {
                 client.deposits.forEach((deposit, index) => {
@@ -1178,6 +1242,7 @@ function toggleSidebar() {
             
             // Show modal
             clientModal.style.display = 'flex';
+            viewClientModal.style.display = 'none';
         }
         
         // Delete client
@@ -1584,17 +1649,24 @@ function toggleSidebar() {
                     client.status === appState.filters.status
                 );
             }
+           // Apply date filters if both are provided
+    if (appState.filters.dateFrom && appState.filters.dateTo) {
+        const dateFrom = new Date(appState.filters.dateFrom);
+        const dateTo = new Date(appState.filters.dateTo);
+        
+        // Set time to start and end of day
+        dateFrom.setHours(0, 0, 0, 0);
+        dateTo.setHours(23, 59, 59, 999);
+        
+        filteredClients = filteredClients.filter(client => {
+            // Handle potential date formats and ensure UTC consistency
+            const createdDate = new Date(client.createdAt || client.creationDate);
+            createdDate.setHours(0, 0, 0, 0);
             
-            // Apply date filters if both are provided
-            if (appState.filters.dateFrom && appState.filters.dateTo) {
-                const dateFrom = new Date(appState.filters.dateFrom);
-                const dateTo = new Date(appState.filters.dateTo);
-                
-                filteredClients = filteredClients.filter(client => {
-                    const clientDate = new Date(client.createdAt);
-                    return clientDate >= dateFrom && clientDate <= dateTo;
-                });
-            }
+            // Compare dates using timestamps
+            return createdDate >= dateFrom && createdDate <= dateTo;
+        });
+    }
             
             // Apply sorting
             if (appState.filters.sort) {
@@ -3145,6 +3217,498 @@ function toggleSidebar() {
     window.location.replace('./index.html');
 }
         
-        // Initialize the application
-        init();
+       // Modify the saveData function to use Firestore
+async function saveData() {
+    try {
+        const { db } = await import('./firebaseConfig.js');
+        const { doc, setDoc } = await import('firebase/firestore');
+        
+        // Create a single document to store all data
+        await setDoc(doc(db, "hotelData", "mainData"), {
+            clients: appState.clients,
+            darkMode: appState.darkMode,
+            currentPage: appState.currentPage,
+            lastUpdated: new Date().toISOString()
+        });
+    } catch (err) {
+        console.error('Error saving data to Firebase:', err);
+    }
+}
 
+// Modify the loadData function to use Firestore
+async function loadData() {
+    try {
+        const { db } = await import('./firebaseConfig.js');
+        const { doc, getDoc } = await import('firebase/firestore');
+        
+        const docRef = doc(db, "hotelData", "mainData");
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            
+            if (data.clients && Array.isArray(data.clients)) {
+                appState.clients = data.clients;
+            }
+            
+            if (data.darkMode !== undefined) {
+                appState.darkMode = data.darkMode;
+            }
+            
+            if (data.currentPage) {
+                appState.currentPage = data.currentPage;
+            }
+        }
+    } catch (err) {
+        console.error('Error loading data from Firebase:', err);
+    }
+}
+
+// Modify the logout function to handle Firebase
+async function logout() {
+    // Clear authentication data
+    localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('loginTime');
+    
+    // No need to clear data as it's now in Firebase
+    
+    // Redirect to login page
+    window.location.replace('./index.html');
+}
+
+// Initialize the application
+async function init() {
+    // Load data first
+    await loadData();
+    
+    // Set up event listeners
+    setupEventListeners();
+    
+    // Initialize UI
+    initUI();
+    
+    // Set initial theme
+    setTheme(appState.darkMode);
+    
+    // Navigate to current page
+    navigateTo(appState.currentPage || 'dashboard');
+}
+
+// Call init and handle any errors
+init().catch(err => console.error('Error initializing app:', err));
+
+
+
+// Add this function to validate dates
+function validateDates() {
+    const creationDateInput = document.getElementById('creation-date').value;
+    const kycDateInput = document.getElementById('kyc-date').value;
+    const productDateInput = document.getElementById('product-date').value;
+
+    // Only proceed with validation if creation date is provided
+    if (!creationDateInput) {
+        return true; // No dates to validate
+    }
+
+    const creationDate = new Date(creationDateInput);
+    const today = new Date();
+
+    // Ensure creation date is not in the future
+    if (creationDate > today) {
+        alert('Creation date cannot be in the future');
+        return false;
+    }
+
+    // Validate KYC date if provided
+    if (kycDateInput) {
+        const kycDate = new Date(kycDateInput);
+        if (kycDate < creationDate) {
+            alert('KYC date cannot be before creation date');
+            return false;
+        }
+    }
+
+    // Validate product date if provided
+    if (productDateInput) {
+        const productDate = new Date(productDateInput);
+        if (productDate < creationDate) {
+            alert('Product date cannot be before creation date');
+            return false;
+        }
+    }
+
+    return true;
+} // This is the correct closing bracket for validateDates()
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    const creationDateInput = document.getElementById('creation-date');
+    if (creationDateInput) {
+        const today = new Date();
+        const formattedDate = today.toISOString().split('T')[0];
+        creationDateInput.value = formattedDate;
+    }
+});
+
+
+document.addEventListener('DOMContentLoaded', function() {
+            
+
+    // Initialize empty team data
+    let teamData = [];
+
+    // Generate unique ID
+    function generateId() {
+        return Math.random().toString(36).substring(2, 9);
+    }
+
+    // Update dashboard summary cards
+    function updateDashboardCards() {
+        // Calculate totals
+        const totalAddedToday = teamData.reduce((total, member) => total + member.addedToday, 0);
+        const totalMonthlyAdded = teamData.reduce((total, member) => total + member.monthlyAdded, 0);
+        const totalOpenAccounts = teamData.reduce((total, member) => total + member.openAccounts, 0);
+        const totalDeposits = teamData.reduce((total, member) => total + member.totalDeposits, 0);
+        
+        // Update the cards
+        document.getElementById('total-added-today').textContent = totalAddedToday.toLocaleString();
+        document.getElementById('total-monthly-added').textContent = totalMonthlyAdded.toLocaleString();
+        document.getElementById('total-open-accounts').textContent = totalOpenAccounts.toLocaleString();
+        document.getElementById('total-deposits-sum').textContent = '$' + totalDeposits.toLocaleString();
+    }
+
+    // Toggle empty state message
+    function toggleEmptyState() {
+        const emptyState = document.getElementById('empty-state');
+        const metricsTable = document.getElementById('metrics-table');
+        
+        if (teamData.length === 0) {
+            emptyState.style.display = 'block';
+            metricsTable.style.display = 'none';
+        } else {
+            emptyState.style.display = 'none';
+            metricsTable.style.display = 'table';
+        }
+    }
+
+    
+
+    // Render team metrics
+    function renderTeamMetrics(data) {
+        toggleEmptyState();
+        
+        if (data.length === 0) return;
+        
+        const tableBody = document.getElementById('metrics-body');
+        tableBody.innerHTML = '';
+
+        data.forEach(member => {
+            const row = document.createElement('tr');
+            row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750';
+            row.dataset.id = member.id;
+            
+            row.innerHTML = `
+                <td class="px-4 py-3 text-sm text-gray-900 dark:text-white" data-label="Team Member">${member.name}</td>
+                <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-white" data-label="Added Today">
+                    <span class="editable-cell" contenteditable="true" data-metric="addedToday" data-member="${member.id}">${member.addedToday}</span>
+                </td>
+                <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-white" data-label="Monthly Added">
+                    <span class="editable-cell" contenteditable="true" data-metric="monthlyAdded" data-member="${member.id}">${member.monthlyAdded}</span>
+                </td>
+                <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-white" data-label="Open Accounts">
+                    <span class="editable-cell" contenteditable="true" data-metric="openAccounts" data-member="${member.id}">${member.openAccounts}</span>
+                </td>
+                <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-white" data-label="Total Deposits">
+                    <span class="editable-cell" contenteditable="true" data-metric="totalDeposits" data-member="${member.id}">$${member.totalDeposits.toLocaleString()}</span>
+                </td>
+                <td class="px-4 py-3 text-sm text-center" data-label="Actions">
+                    <button class="delete-member-btn text-red-500 hover:text-red-700" data-id="${member.id}" data-name="${member.name}">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>
+            `;
+            
+            tableBody.appendChild(row);
+        });
+
+        // Add event listeners to editable cells
+        document.querySelectorAll('.editable-cell').forEach(cell => {
+cell.addEventListener('focus', function() {
+const value = this.textContent;
+// Remove currency symbol and commas for editing
+if (this.dataset.metric === 'totalDeposits') {
+    this.textContent = value.replace(/[$,]/g, '');
+}
+// Select all text on focus
+const range = document.createRange();
+range.selectNodeContents(this);
+const selection = window.getSelection();
+selection.removeAllRanges();
+selection.addRange(range);
+});
+
+cell.addEventListener('blur', function() {
+let value = this.textContent.trim();
+const metric = this.dataset.metric;
+
+// Ensure value is a valid number
+value = value.replace(/[^\d.-]/g, '');
+const numValue = parseFloat(value) || 0;
+
+// Format based on metric type
+if (metric === 'totalDeposits') {
+    this.textContent = '$' + numValue.toLocaleString();
+} else {
+    // For other metrics, just use whole numbers
+    this.textContent = Math.round(numValue).toLocaleString();
+}
+
+// Update data
+const memberId = this.dataset.member;
+const memberIndex = teamData.findIndex(m => m.id === memberId);
+if (memberIndex !== -1) {
+    teamData[memberIndex][metric] = Math.round(numValue);
+    updateDashboardCards();
+}
+});
+
+cell.addEventListener('paste', function(e) {
+e.preventDefault();
+const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+const cleanedText = pastedText.replace(/[^\d.-]/g, '');
+document.execCommand('insertText', false, cleanedText);
+});
+
+
+
+// Add visual feedback on hover
+cell.addEventListener('mouseover', function() {
+this.style.backgroundColor = 'rgba(93, 92, 222, 0.05)';
+this.style.cursor = 'pointer';
+});
+
+cell.addEventListener('mouseout', function() {
+this.style.backgroundColor = '';
+});
+});
+
+cell.addEventListener('keydown', function(e) {
+const isNumberKey = /^\d$/.test(e.key);
+const isControlKey = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', '.'].includes(e.key);
+const isModifierKey = e.ctrlKey || e.metaKey;
+const isCopyPaste = isModifierKey && ['c', 'v', 'x'].includes(e.key.toLowerCase());
+
+// Prevent invalid input
+if (!isNumberKey && !isControlKey && !isCopyPaste) {
+    e.preventDefault();
+}
+
+// Handle Enter key to save
+if (e.key === 'Enter') {
+    e.preventDefault();
+    this.blur();
+}
+
+// Handle Escape key to cancel
+if (e.key === 'Escape') {
+    e.preventDefault();
+    // Revert to original value
+    const memberId = this.dataset.member;
+    const metric = this.dataset.metric;
+    const member = teamData.find(m => m.id === memberId);
+    if (member) {
+        if (metric === 'totalDeposits') {
+            this.textContent = '$' + member[metric].toLocaleString();
+        } else {
+            this.textContent = member[metric].toLocaleString();
+        }
+    }
+    this.blur();
+}
+});
+
+        // Add event listeners to delete buttons
+        document.querySelectorAll('.delete-member-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const memberId = this.dataset.id;
+                const memberName = this.dataset.name;
+                
+                document.getElementById('delete-member-name').textContent = memberName;
+                document.getElementById('confirm-delete').dataset.id = memberId;
+                
+                openModal('delete-confirmation-modal');
+            });
+        });
+        
+        // Update dashboard cards after rendering
+        updateDashboardCards();
+    }
+
+    // Initial render with empty state
+    toggleEmptyState();
+    updateDashboardCards();
+
+    // Filter functionality
+    const metricFilter = document.getElementById('metric-filter');
+    metricFilter.addEventListener('change', function() {
+        applyFiltersAndSearch();
+    });
+
+    // Search functionality
+    const searchBar = document.getElementById('search-bar');
+    searchBar.addEventListener('input', function() {
+        applyFiltersAndSearch();
+    });
+
+    function applyFiltersAndSearch() {
+        const filterValue = metricFilter.value;
+        const searchValue = searchBar.value.toLowerCase();
+        
+        let filteredData = teamData.filter(member => 
+            member.name.toLowerCase().includes(searchValue)
+        );
+
+        // Sort based on filter
+        if (filterValue !== 'all') {
+            filteredData.sort((a, b) => {
+                switch(filterValue) {
+                    case 'added-today':
+                        return b.addedToday - a.addedToday;
+                    case 'monthly-added':
+                        return b.monthlyAdded - a.monthlyAdded;
+                    case 'open-accounts':
+                        return b.openAccounts - a.openAccounts;
+                    case 'total-deposits':
+                        return b.totalDeposits - a.totalDeposits;
+                    default:
+                        return 0;
+                }
+            });
+        }
+
+        renderTeamMetrics(filteredData);
+    }
+
+    // Modal functionality
+    function openModal(modalId) {
+        const modal = document.getElementById(modalId);
+        modal.classList.add('show');
+    }
+
+    function closeAllModals() {
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.classList.remove('show');
+        });
+    }
+
+    // Close modal buttons
+    document.querySelectorAll('.close-modal').forEach(btn => {
+        btn.addEventListener('click', closeAllModals);
+    });
+
+    // Close modal when clicking outside
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAllModals();
+            }
+        });
+    });
+
+    // Open Add Member modal
+    document.getElementById('add-member-btn').addEventListener('click', function() {
+        openModal('add-member-modal');
+    });
+
+    // Also add event listener to the empty state button
+    document.getElementById('empty-add-btn').addEventListener('click', function() {
+        openModal('add-member-modal');
+    });
+
+    // Add Member form submission
+    document.getElementById('add-member-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const newMember = {
+            id: generateId(),
+            name: document.getElementById('member-name').value,
+            addedToday: parseInt(document.getElementById('added-today').value) || 0,
+            monthlyAdded: parseInt(document.getElementById('monthly-added').value) || 0,
+            openAccounts: parseInt(document.getElementById('open-accounts').value) || 0,
+            totalDeposits: parseInt(document.getElementById('total-deposits').value) || 0
+        };
+        
+        // Add to team data
+        teamData.push(newMember);
+        
+        // Reset form
+        this.reset();
+        
+        // Close modal
+        closeAllModals();
+        
+        // Show success message
+        showToast('Team member added successfully!', 'success');
+        
+        // Rerender table
+        applyFiltersAndSearch();
+    });
+
+    // Edit Member form submission
+    document.getElementById('edit-member-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const memberId = document.getElementById('edit-member-id').value;
+        const memberIndex = teamData.findIndex(m => m.id === memberId);
+        
+        if (memberIndex !== -1) {
+            teamData[memberIndex] = {
+                id: memberId,
+                name: document.getElementById('edit-member-name').value,
+                addedToday: parseInt(document.getElementById('edit-added-today').value) || 0,
+                monthlyAdded: parseInt(document.getElementById('edit-monthly-added').value) || 0,
+                openAccounts: parseInt(document.getElementById('edit-open-accounts').value) || 0,
+                totalDeposits: parseInt(document.getElementById('edit-total-deposits').value) || 0
+            };
+            
+            // Close modal
+            closeAllModals();
+            
+            // Show success message
+            showToast('Team member updated successfully!', 'success');
+            
+            // Rerender table
+            applyFiltersAndSearch();
+        }
+    });
+
+    // Delete member confirmation
+    document.getElementById('confirm-delete').addEventListener('click', function() {
+        const memberId = this.dataset.id;
+        
+        // Remove member from data
+        teamData = teamData.filter(member => member.id !== memberId);
+        
+        // Close modal
+        closeAllModals();
+        
+        // Show success message
+        showToast('Team member deleted successfully!', 'success');
+        
+        // Rerender table
+        applyFiltersAndSearch();
+    });
+
+    // Toast notification
+    function showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+        toast.className = `fixed bottom-4 right-4 ${bgColor} text-white px-4 py-2 rounded shadow-lg`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+});
